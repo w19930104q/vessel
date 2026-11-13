@@ -379,6 +379,35 @@ Vessel::Cargo::FieldType.add(:price) { |value| value.to_s.gsub(/[^\d.]/, "").to_
 
 Every `field :price` is then passed through that block, `typing: false` skips it.
 
+The same field name can carry different units on different sites, so a rule
+can also be declared on the crawler class with `field_type`. Subclasses
+inherit and may override it without touching the parent or sibling classes:
+
+```ruby
+class CentsShop < Vessel::Cargo
+  field_type :price do |value|
+    value.to_s.gsub(/[^\d]/, "").to_i # "￥1099" -> 1099
+  end
+end
+
+class YuanShop < Vessel::Cargo
+  field_type :price do |value|
+    value.to_s.gsub(/[^\d.]/, "").to_f # "10.99 元" -> 10.99
+  end
+end
+```
+
+A single launch can override any rule:
+
+```ruby
+YuanShop.run(field_types: { price: ->(value) { value.to_s } })
+```
+
+Precedence is the run override, the crawler class, its nearest ancestor, then
+the global registry. Each Engine snapshots its rules when it is created, so
+re-registering a rule at runtime only affects later Engines and parallel
+Engines never cross rules.
+
 
 ## Middleware
 

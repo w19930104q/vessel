@@ -18,6 +18,18 @@
   required, and an unknown driver or a missing driver gem raises
   `Vessel::DriverNotFoundError` with the gem to install.
 
+### Added
+
+* Per-crawler field type rules. `field_type :price { |value| ... }` declares a
+  conversion on a crawler class; subclasses inherit the rules and can override
+  a name without affecting the parent or sibling classes. A single run can
+  override anything via `Cargo.run(..., field_types: { price: ... })` or
+  `Engine.new(klass, field_types: ...)`. Precedence is run override, the
+  crawler class, its nearest ancestor, then the global
+  `Vessel::Cargo::FieldType` registry. Each Engine snapshots its rules when it
+  is created, so re-registering a rule at runtime only affects later Engines
+  and interleaved Engines never share or cross rules.
+
 ## 0.3.0 (2026-08-27)
 
 The first release since 2021, the internals were rewritten along the way.

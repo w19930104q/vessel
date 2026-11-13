@@ -7,9 +7,10 @@ require "vessel/cargo/callbacks"
 
 module Vessel
   class Cargo
-    def self.run(settings = nil, &)
+    def self.run(settings = nil, field_types: nil, **settings_kwargs, &)
+      settings = settings_kwargs if settings.nil?
       self.settings.merge!(Hash(settings))
-      Engine.run(self, &)
+      Engine.run(self, field_types: field_types, &)
     end
 
     def self.build_request(url:, **options)

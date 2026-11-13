@@ -92,6 +92,27 @@ module Vessel
         expect(crawler.settings[:headers]).to eq(nil)
         expect(crawler.settings[:domain]).to eq("alabama.com")
       end
+
+      it "forwards per-run field type rules to the Engine" do
+        allow(Engine).to receive(:run)
+        crawler = Class.new(Vessel::Cargo)
+        rules = { price: proc { |v| v } }
+
+        crawler.run(nil, field_types: rules)
+
+        expect(Engine).to have_received(:run).with(crawler, field_types: rules)
+      end
+
+      it "accepts settings as a positional hash together with field rules" do
+        allow(Engine).to receive(:run)
+        crawler = Class.new(Vessel::Cargo)
+        rules = { price: proc { |v| v } }
+
+        crawler.run({ domain: "alabama.com" }, field_types: rules)
+
+        expect(crawler.settings[:domain]).to eq("alabama.com")
+        expect(Engine).to have_received(:run).with(crawler, field_types: rules)
+      end
     end
   end
 end

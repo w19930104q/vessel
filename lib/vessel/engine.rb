@@ -10,11 +10,15 @@ module Vessel
       new(...).tap(&:run)
     end
 
-    attr_reader :crawler_class, :settings, :scheduler, :middleware_scheduler
+    attr_reader :crawler_class, :settings, :scheduler, :middleware_scheduler,
+                :field_types
 
-    def initialize(klass, &)
+    def initialize(klass, field_types: nil, &)
       @crawler_class = klass
       @settings = klass.settings
+      # Snapshot the rules once, at Engine creation. Re-registering a rule
+      # later only affects Engines created afterwards.
+      @field_types = build_field_types(field_types)
       @queue = SizedQueue.new(settings[:max_threads])
       @scheduler = Scheduler.new(@queue, settings)
       @middleware_scheduler = MiddlewareScheduler.new(settings, &)
@@ -22,15 +26,15 @@ module Vessel
 
     def run
       at_exit do
-        crawler_class.new.info(stats)
-        crawler_class.new.before_stop
+        build_crawler.info(stats)
+        build_crawler.before_stop
       end
 
       trap_sigint
-      crawler_class.new.before_start
-      crawler_class.new.before(stats)
+      build_crawler.before_start
+      build_crawler.before(stats)
       @info_task = Concurrent::TimerTask.execute(execution_interval: crawler_class::INFO_INTERVAL) do
-        crawler_class.new.info(stats)
+        build_crawler.info(stats)
       end
       schedule(crawler_class.start_requests)
       event_loop
@@ -38,7 +42,7 @@ module Vessel
       @info_task&.shutdown
       scheduler.stop
       middleware_scheduler.stop
-      crawler_class.new.after(stats)
+      build_crawler.after(stats)
     end
 
     def parse(url, handler, data = nil)
@@ -55,7 +59,7 @@ module Vessel
       increase(:res_dequeued)
       return if response.rejected
 
-      crawler = crawler_class.new(response)
+      crawler = build_crawler(response)
       crawler_class.store_cookies(response.cookies) if settings[:allow_cookies]
       args = error ? [:on_error, request, error] : [request.handler].compact
       Logger.debug("Engine: crawler starts processing #{response.url} with :#{response.handler}")
@@ -78,6 +82,20 @@ module Vessel
     end
 
     private
+
+    def build_crawler(response = nil)
+      crawler_class.new(response).tap do |crawler|
+        crawler.effective_field_types = field_types
+      end
+    end
+
+    # Precedence, lowest to highest:
+    # global registry -> ancestor classes -> the crawler class itself ->
+    # rules passed for this single run.
+    def build_field_types(overrides)
+      rules = Cargo::FieldType.types.merge(crawler_class.resolved_field_types)
+      rules.merge(overrides || {}).freeze
+    end
 
     def engine_idle?
       @queue.empty? &&
